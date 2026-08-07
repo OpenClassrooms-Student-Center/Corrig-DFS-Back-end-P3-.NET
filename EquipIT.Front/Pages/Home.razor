@@ -1,0 +1,164 @@
+﻿@page "/"
+@inject EquipmentApiService ApiService
+@inject IStringLocalizer<App> Localizer
+
+<PageTitle>@Localizer["AppName"]</PageTitle>
+
+<h1>@Localizer["Equipment"]</h1>
+
+@if (equipments is null)
+{
+    <p class="text-muted">@Localizer["Loading"]</p>
+}
+else
+{
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>@Localizer["Name"]</th>
+                <th>@Localizer["Category"]</th>
+                <th>@Localizer["Status"]</th>
+                <th>@Localizer["Borrower"]</th>
+                <th>@Localizer["BorrowDate"]</th>
+                <th>@Localizer["LastReturn"]</th>
+                <th class="text-end">@Localizer["Action"]</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var equipment in equipments)
+            {
+                <tr>
+                    <td>@equipment.Name</td>
+                    <td>@equipment.Category</td>
+                    <td>
+                        @if (equipment.IsAvailable)
+                        {
+                            <span class="badge text-bg-success">@Localizer["Available"]</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-warning">@Localizer["Borrowed"]</span>
+                        }
+                    </td>
+                    <td>
+                        @if (equipment.IsAvailable)
+                        {
+                            @("-")
+                        }
+                        else
+                        {
+                            @($"{equipment.BorrowerFirstName} {equipment.BorrowerLastName}")
+                        }
+                    </td>
+                    <td>@(equipment.BorrowDate?.ToString("g") ?? "-")</td>
+                    <td>@(equipment.LastReturnDate?.ToString("g") ?? "-")</td>
+                    <td class="text-end">
+                        @if (equipment.IsAvailable)
+                        {
+                            <button class="btn btn-sm btn-primary" @onclick="() => ShowBorrowForm(equipment.Id)" disabled="@isBusy">
+                                @Localizer["Borrow"]
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => ReturnAsync(equipment)" disabled="@isBusy">
+                                @Localizer["Return"]
+                            </button>
+                        }
+                    </td>
+                </tr>
+                @if (borrowingEquipmentId == equipment.Id)
+                {
+                    <tr>
+                        <td colspan="7">
+                            <div class="d-flex gap-2">
+                                <input class="form-control form-control-sm" placeholder="@Localizer["FirstName"]" @bind="borrowerFirstName" />
+                                <input class="form-control form-control-sm" placeholder="@Localizer["LastName"]" @bind="borrowerLastName" />
+                                <button class="btn btn-sm btn-success" @onclick="ConfirmBorrowAsync" disabled="@isBusy">
+                                    @Localizer["Confirm"]
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="CancelBorrow">
+                                    @Localizer["Cancel"]
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger" role="alert">
+        @errorMessage
+    </div>
+}
+
+@code {
+    private List<Equipment>? equipments;
+    private bool isBusy;
+    private string? errorMessage;
+    private int? borrowingEquipmentId;
+    private string borrowerFirstName = string.Empty;
+    private string borrowerLastName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEquipmentAsync();
+    }
+
+    private async Task LoadEquipmentAsync()
+    {
+        errorMessage = null;
+        equipments = await ApiService.GetEquipmentAsync();
+    }
+
+    private void ShowBorrowForm(int id)
+    {
+        borrowingEquipmentId = id;
+        borrowerFirstName = string.Empty;
+        borrowerLastName = string.Empty;
+    }
+
+    private void CancelBorrow()
+    {
+        borrowingEquipmentId = null;
+    }
+
+    private async Task ConfirmBorrowAsync()
+    {
+        if (borrowingEquipmentId is null)
+        {
+            return;
+        }
+
+        await ExecuteActionAsync(() => ApiService.BorrowAsync(borrowingEquipmentId.Value, borrowerFirstName, borrowerLastName));
+        borrowingEquipmentId = null;
+    }
+
+    private async Task ReturnAsync(Equipment equipment)
+    {
+        await ExecuteActionAsync(() => ApiService.ReturnAsync(equipment.Id));
+    }
+
+    private async Task ExecuteActionAsync(Func<Task> action)
+    {
+        isBusy = true;
+        errorMessage = null;
+        try
+        {
+            await action();
+            await LoadEquipmentAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+}

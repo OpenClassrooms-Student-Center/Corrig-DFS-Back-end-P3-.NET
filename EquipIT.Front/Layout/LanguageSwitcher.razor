@@ -1,0 +1,40 @@
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<div class="btn-group btn-group-sm">
+    <button class="btn @(IsFrench ? "btn-primary" : "btn-outline-primary")" @onclick="SwitchToFrench">
+        FR
+    </button>
+    <button class="btn @(IsEnglish ? "btn-primary" : "btn-outline-primary")" @onclick="SwitchToEnglish">
+        EN
+    </button>
+</div>
+
+@code {
+    private const string FrenchCulture = "fr-FR";
+    private const string EnglishCulture = "en-US";
+
+    private bool IsFrench => CultureInfo.CurrentUICulture.Name.StartsWith("fr");
+    private bool IsEnglish => CultureInfo.CurrentUICulture.Name.StartsWith("en");
+
+    private async Task SwitchToFrench()
+    {
+        await SetCulture(FrenchCulture);
+    }
+
+    private async Task SwitchToEnglish()
+    {
+        await SetCulture(EnglishCulture);
+    }
+
+    private async Task SetCulture(string cultureName)
+    {
+        if (CultureInfo.CurrentUICulture.Name == cultureName)
+        {
+            return;
+        }
+
+        await JS.InvokeVoidAsync("appCulture.set", cultureName);
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+    }
+}
